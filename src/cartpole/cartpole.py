@@ -2,9 +2,11 @@ import gym
 import numpy as np
 import random
 import tensorflow as tf
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.optimizers import Adam
+import tensorflow.keras as keras
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.optimizers import Adam
 
 
 def data_preparation(N, K, f, render=False):
@@ -47,7 +49,7 @@ def build_model():
     model.add(Dense(128, input_dim=4, activation='relu'))
     model.add(Dense(52, activation='relu'))
     model.add(Dense(2, activation='softmax'))
-    model.compile(loss='mse', optimzer=Adam())
+    model.compile(optimizer=Adam(), loss='mse')
     return model
 
 
