@@ -1,3 +1,5 @@
+import time
+
 import gym
 import random
 import numpy as np
@@ -9,11 +11,13 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
 
 
-def data_preperation(N, K, max_step, f, render=False):
+def data_preparation(N, K, max_step, f, render=False):
     game_data = []
+    time_start = time.time()
     for i in range(N):
         game_steps = []
         obs = env.reset()
+        score = 0
         max_position = obs[0]
         for step in range(max_step):
             if render:
@@ -21,12 +25,14 @@ def data_preperation(N, K, max_step, f, render=False):
             action = f(obs)
             game_steps.append((obs, action))
             obs, reward, done, info = env.step(action)
+            score += reward
             if max_position < obs[0]:
                 max_position = obs[0]
             if done:
                 break
-        game_data.append((max_position, game_steps))
+        game_data.append((score + max_position, game_steps))
 
+    print("Data preparation time: " + str(time.time() - time_start))
     game_data.sort(key=lambda s: s[0], reverse=True)
 
     training_set = []
@@ -61,7 +67,7 @@ def train_model(model, training_set):
     X = np.array([i[0] for i in training_set]).reshape(-1, 2)
     Y = np.array([i[1] for i in training_set]).reshape(-1, 3)
     with tf.device('/cpu:0'):
-        model.fit(X, Y, epochs=10)
+        model.fit(X, Y, epochs=10, verbose=0)
 
 
 if __name__ == '__main__':
@@ -72,12 +78,12 @@ if __name__ == '__main__':
     goal_steps = 200
     N = 100
     K = 10
-    self_play_count = 10
+    self_play_count = 12
 
     env = gym.make('MountainCar-v0')
 
     model = build_model()
-    data = data_preperation(N, K, goal_steps, f=lambda s: random.randrange(0, 3))
+    data = data_preparation(N, K, goal_steps, f=lambda s: random.randrange(0, 3))
     train_model(model, data)
 
     def predictor(obs):
@@ -86,7 +92,7 @@ if __name__ == '__main__':
 
     for i in range(self_play_count):
         print("Self Play:{0}".format(i))
-        data = data_preperation(N, K, goal_steps, f=predictor, render=False)
+        data = data_preparation(N, K, goal_steps, f=predictor, render=False)
         train_model(model, data)
 
-    data = data_preperation(N, K, goal_steps, f=predictor, render=True)
+    data = data_preparation(N, K, goal_steps, f=predictor, render=True)
