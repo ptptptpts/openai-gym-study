@@ -7,6 +7,7 @@ import tensorflow.keras as keras
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
+from tensorflow.python.client import device_lib
 
 
 def data_preparation(N, K, f, render=False):
@@ -45,21 +46,26 @@ def data_preparation(N, K, f, render=False):
 
 
 def build_model():
-    model = Sequential()
-    model.add(Dense(128, input_dim=4, activation='relu'))
-    model.add(Dense(52, activation='relu'))
-    model.add(Dense(2, activation='softmax'))
-    model.compile(optimizer=Adam(), loss='mse')
+    with tf.device('/cpu:0'):
+        model = Sequential()
+        model.add(Dense(128, input_dim=4, activation='relu'))
+        model.add(Dense(52, activation='relu'))
+        model.add(Dense(2, activation='softmax'))
+        model.compile(optimizer=Adam(), loss='mse')
     return model
 
 
 def train_model(model, training_set):
     X = np.array([i[0] for i in training_set]).reshape(-1, 4)
     y = np.array([i[1] for i in training_set]).reshape(-1, 2)
-    model.fit(X, y, epochs=10)
+    with tf.device('/cpu:0'):
+        model.fit(X, y, epochs=10)
 
 
 if __name__ == '__main__':
+    print(tf.config.list_logical_devices('GPU'))
+    print(tf.test.gpu_device_name())
+    print(device_lib.list_local_devices())
     env = gym.make('CartPole-v1')
     goal_steps = 500
     N = 100
@@ -71,8 +77,8 @@ if __name__ == '__main__':
 
 
     def predictor(s):
-        probability = model(s.reshape(-1, 4), training=False)[0]
-        return np.random.choice([0, 1], p=probability.numpy())
+        with tf.device('/cpu:0'):
+            return np.random.choice([0, 1], p=model(s.reshape(-1, 4), training=False)[0].numpy())
 
 
     for i in range(self_play_count):
