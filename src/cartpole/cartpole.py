@@ -56,20 +56,29 @@ def build_model():
 def train_model(model, training_set):
     X = np.array([i[0] for i in training_set]).reshape(-1, 4)
     y = np.array([i[1] for i in training_set]).reshape(-1, 2)
-    model().fit(X, y, epochs=10)
+    model.fit(X, y, epochs=10)
 
 
-env = gym.make('CartPole-v1')
-goal_steps = 500
-N = 1000
-K = 50
-model = build_model
-training_data = data_preparation(N, K, lambda s: random.randrange(0, 2))
-train_model(model, training_data)
+if __name__ == '__main__':
+    env = gym.make('CartPole-v1')
+    goal_steps = 500
+    N = 100
+    K = 10
+    self_play_count = 10
+    model = build_model()
+    training_data = data_preparation(N, K, lambda s: random.randrange(0, 2))
+    train_model(model, training_data)
 
 
-def predictor(s):
-    return np.random.choice([0, 1], p=model.predict(s.reshape(-1, 4))[0])
+    def predictor(s):
+        probability = model(s.reshape(-1, 4), training=False)[0]
+        return np.random.choice([0, 1], p=probability.numpy())
 
 
-data_preparation(100, 100, predictor, True)
+    for i in range(self_play_count):
+        print("Self Play:{0}".format(i))
+        K = (N // 9 + K) // 2
+        training_data = data_preparation(N, K, predictor)
+        train_model(model, training_data)
+
+    data_preparation(100, 100, predictor, True)
