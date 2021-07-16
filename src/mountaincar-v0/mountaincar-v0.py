@@ -1,10 +1,11 @@
+import datetime
 import time
-
+import os
 import gym
 import random
 import numpy as np
 import tensorflow as tf
-
+from tensorflow import keras
 from tensorflow.python.client import device_lib
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
@@ -67,13 +68,28 @@ def train_model(model, training_set):
     X = np.array([i[0] for i in training_set]).reshape(-1, 2)
     Y = np.array([i[1] for i in training_set]).reshape(-1, 3)
     with tf.device('/cpu:0'):
-        model.fit(X, Y, epochs=10, verbose=0)
+        model.fit(X, Y,
+                  epochs=100,
+                  verbose=0,
+                  validation_data=(X, Y),
+                  callbacks=[tb_callback])
+
+
+def make_tensorboard_dir(dir_name):
+    root_logdir = os.path.join(os.curdir, dir_name)
+    sub_dir_name = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    return os.path.join(root_logdir, sub_dir_name)
 
 
 if __name__ == '__main__':
     print(tf.config.list_logical_devices('GPU'))
     print(tf.test.gpu_device_name())
     print(device_lib.list_local_devices())
+
+    tb_log_dir = make_tensorboard_dir("tensor_log")
+    tb_callback = keras.callbacks.TensorBoard(log_dir=tb_log_dir,
+                                              histogram_freq=1,
+                                              profile_batch='500,520')
 
     goal_steps = 200
     N = 100
@@ -86,13 +102,16 @@ if __name__ == '__main__':
     data = data_preparation(N, K, goal_steps, f=lambda s: random.randrange(0, 3))
     train_model(model, data)
 
+
     def predictor(obs):
         with tf.device('/cpu:0'):
             return np.random.choice([0, 1, 2], p=model(obs.reshape(-1, 2), training=False)[0].numpy())
+
 
     for i in range(self_play_count):
         print("Self Play:{0}".format(i))
         data = data_preparation(N, K, goal_steps, f=predictor, render=False)
         train_model(model, data)
 
-    data = data_preparation(N, K, goal_steps, f=predictor, render=True)
+    data_set = data_preparation(100, 100, goal_steps, f=predictor, render=False)
+    data_preparation(10, 0, goal_steps, f=predictor, render=True)
