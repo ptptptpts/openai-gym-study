@@ -57,9 +57,9 @@ def data_preparation(N, K, max_step, f, render=False):
 def build_model():
     with tf.device('/cpu:0'):
         model = Sequential()
-        model.add(Dense(128, input_dim=2, activation='relu'))
-        model.add(Dense(48, activation='relu'))
-        model.add(Dense(3, activation='softmax'))
+        model.add(Dense(128, name='dense_1', input_dim=2, activation='relu'))
+        model.add(Dense(48, name='dense_2', activation='relu'))
+        model.add(Dense(3, name='dense_3', activation='softmax'))
         model.compile(optimizer='Adam', loss='mse')
     return model
 
@@ -67,12 +67,14 @@ def build_model():
 def train_model(model, training_set):
     X = np.array([i[0] for i in training_set]).reshape(-1, 2)
     Y = np.array([i[1] for i in training_set]).reshape(-1, 3)
+    time_start = time.time()
     with tf.device('/cpu:0'):
         model.fit(X, Y,
                   epochs=100,
                   verbose=0,
                   validation_data=(X, Y),
                   callbacks=[tb_callback])
+    print("Train time: " + str(time.time() - time_start))
 
 
 def make_tensorboard_dir(dir_name):
