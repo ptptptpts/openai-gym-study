@@ -9,24 +9,30 @@ from tensorflow.python.keras.layers import Dense
 from tensorflow.python.keras.models import Sequential
 
 
-def analysis():
+def analysis(env, max_round, action_function, reward_function, save_function, render=False, model=None):
     round = 0
+    score = 0
     datas = []
-    for round in range(1000):
-        action = [random.uniform(-1, 1)]
+    saves = save_function()
+    start_obs = env.reset()
+    for round in range(max_round):
+        if render:
+            env.render()
+        action = action_function(model, start_obs)
         obs, reward, done, info = env.step(action)
         datas.append((round, obs, reward, done, info, action))
+        score += reward_function(reward, obs, saves)
         if done:
             break
-        env.render()
-    print("round:", round)
 
-    min_height = datas[0][1][1]
-    min_height_round = 0
-    max_height = min_height
-    max_height_round = 0
+    min_velocity = datas[0][1][1]
+    min_velocity_round = 0
+    max_velocity = min_velocity
+    max_velocity_round = 0
     max_position = datas[0][1][0]
     max_position_round = 0
+    min_position = datas[0][1][0]
+    min_position_round = 0
     rewards = [0, 0]
     for data in datas:
         print("round ", data[0],
@@ -39,32 +45,41 @@ def analysis():
             rewards[0] += 1
         else:
             rewards[1] += 1
-        if data[1][1] < min_height:
-            min_height = data[1][1]
-            min_height_round = data[0]
-        if data[1][1] > max_height:
-            max_height = data[1][1]
-            max_height_round = data[0]
+        if data[1][1] < min_velocity:
+            min_velocity = data[1][1]
+            min_velocity_round = data[0]
+        if data[1][1] > max_velocity:
+            max_velocity = data[1][1]
+            max_velocity_round = data[0]
         if data[1][0] > max_position:
             max_position = data[1][0]
             max_position_round = data[0]
+        if data[1][0] < min_position:
+            min_position = data[1][0]
+            min_position_round = data[0]
 
+    print("Round:", round)
+    print("Score:", score)
     print("Positive reward: ", rewards[0])
     print("Negative reward: ", rewards[1])
-    print("Min Height: ", min_height, ", Min Height Round: ", min_height_round)
-    print("Max Height: ", max_height, ", Max Height Round: ", max_height_round)
+    print("Start Velocity: {0}, Start Position: {1}".format(start_obs[1],start_obs[0]))
+    print("Min Velocity: ", min_velocity, ", Min Velocity Round: ", min_velocity_round)
+    print("Max Velocity: ", max_velocity, ", Max Velocity Round: ", max_velocity_round)
     print("Max Position: ", max_position, ", Max Position Round: ", max_position_round)
+    print("Max Position Diff: ", max_position - start_obs[0])
+    print("Min Position: ", min_position, ", Min Position Round: ", min_position_round)
+    print("Min Position Diff: ", start_obs[0] - min_position)
 
 
 def data_preparation(env, run_count, sample_count, max_round, action_function, reward_function, sort_key_function,
                      save_function, render=False, model=None):
     run_data = []
-    saves = save_function()
     time_start = time.time()
     for current_run_count in range(run_count):
         score = 0
         run_step = []
         obs = env.reset()
+        saves = save_function()
         for current_round in range(max_round):
             if render:
                 env.render()
@@ -82,7 +97,12 @@ def data_preparation(env, run_count, sample_count, max_round, action_function, r
     training_set = []
     for current_sample_count in range(sample_count):
         for step in run_data[current_sample_count][1]:
-            training_set.append((step[0], step[1]))
+            if step[1][0] == 1:
+                training_set.append((step[0], [0, 0, 1]))
+            elif step[1][0] == 0:
+                training_set.append((step[0], [0, 1, 0]))
+            else:
+                training_set.append((step[0], [1, 0, 0]))
 
     print("{0}/{1}th score:{2}".format(sample_count, run_count, run_data[sample_count - 1][0]))
     if render:
@@ -97,7 +117,7 @@ def build_model():
         model = Sequential()
         model.add(Dense(128, name='dense_1', input_dim=2, activation='relu'))
         model.add(Dense(64, name='dense_2', activation='relu'))
-        model.add(Dense(1, name='dense_3', activation='softsign'))
+        model.add(Dense(3, name='dense_3', activation='softmax'))
         model.compile(optimizer='Adam', loss='mse')
     return model
 
@@ -120,17 +140,17 @@ def build_x(training_set):
 
 
 def build_y(training_set):
-    return np.array([i[1] for i in training_set]).reshape(-1, 1)
+    return np.array([i[1] for i in training_set]).reshape(-1, 3)
 
 
 def predict_action(model, obs):
+    # with tf.device('/cpu:0'):
+    #     action = model(obs.reshape(-1, 2), training=False).numpy()[0]
+    #     action = (action - 0.5) * 2
+    #     return action
     with tf.device('/cpu:0'):
-        action = model(obs.reshape(-1, 2), training=False).numpy()[0] * 10
-        if action[0] > 1:
-            action[0] = 1
-        elif action[0] < -1:
-            action[0] = -1
-        return action
+        percentage = model(obs.reshape(-1, 2), training=False)[0].numpy()
+        return [np.random.choice([-1, 0, 1], p=percentage)]
 
 
 def calculate_reward(reward, obs, saves):
@@ -139,7 +159,7 @@ def calculate_reward(reward, obs, saves):
         saves['max_position'] = obs[0]
     else:
         if saves['max_position'] < obs[0]:
-            ret_reward = (obs[0] - saves['max_position']) * 100
+            ret_reward += (obs[0] - saves['max_position']) * 100
             saves['max_position'] = obs[0]
     return ret_reward
 
@@ -158,12 +178,16 @@ if __name__ == '__main__':
     training_count = 10
     max_height = -10
 
-    # analysis()
+    # analysis(env, max_round,
+    #          action_function=lambda model, obs: [random.randrange(-1, 1)],
+    #          reward_function=calculate_reward,
+    #          save_function=build_save,
+    #          render=True)
 
     model = build_model()
 
     training_set = data_preparation(env, run_count, sample_count, max_round,
-                                    action_function=lambda model, obs: [random.uniform(-1, 1)],
+                                    action_function=lambda model, obs: [random.randrange(-1, 2)],
                                     reward_function=calculate_reward,
                                     sort_key_function=lambda s: -s[0],
                                     save_function=build_save,
